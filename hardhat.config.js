@@ -1,4 +1,5 @@
 require("@nomicfoundation/hardhat-toolbox");
+require("dotenv").config();
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
@@ -6,7 +7,7 @@ module.exports = {
   networks: {
     hardhat: {
       forking: {
-        url: "https://rpc.linea.build",
+        url: process.env.LINEA_URL || "https://rpc.linea.build",
         enabled: true,
       },
       chains: {
@@ -16,6 +17,11 @@ module.exports = {
           },
         },
       },
+    },
+    linea: {
+      // 59144 (0xe708)
+      url: process.env.LINEA_URL || "https://rpc.linea.build",
+      accounts: process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
     },
   },
 };
