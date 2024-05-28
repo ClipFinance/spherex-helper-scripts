@@ -6,10 +6,10 @@ const assert = require("assert");
 
 // ~~~~~~~~~~~ SETTINGS ~~~~~~~~~~~
 // this assume the owner and the operator will be the same address (if this is not the case the script should be altered).
-const SPHEREX_OPERATOR_ADDRESS = "0x0000000000000000000000000000000000001337";
-const SPHEREX_ENGINE_ADDRESS = "0x0000000000000000000000000000000000001337";
-const CONTRACTS_DATA_PATH = "";
-const LOCAL_FORK = true;
+const SPHEREX_ADMIN_ADDRESS = "0x0000619b2b909a6a422c18eb804b92f798370705";
+const SPHEREX_OPERATOR_ADDRESS = "0x0000619b2b909a6a422c18eb804b92f798370705";
+const SPHEREX_ENGINE_ADDRESS = "0xB3e83bd5448aC826032C8DF59ec839A8449C39a2"; // Check the address in the deployAndConfigureEngine.js script logs: "engine address is 0x..."
+const CONTRACTS_DATA_PATH = "./files/cliplineacontracts.json";
 
 // ~~~~~~~~~~~ SPHERX ABI ~~~~~~~~~~~
 
@@ -125,6 +125,8 @@ const ENGINE_SUPPORTS_INTERFACE_DATA = "0x53e41baa";
 
 async function main() {
   console.log("Starting script");
+  const LOCAL_FORK = hre.network.name === "localhost" || hre.network.name === "hardhat";
+
   let contractsData;
   try {
     const data = fs.readFileSync(CONTRACTS_DATA_PATH, "utf8");
@@ -141,39 +143,29 @@ async function main() {
     console.log("Running on local fork");
     await hre.network.provider.request({
       method: "hardhat_impersonateAccount",
-      params: [SPHEREX_OPERATOR_ADDRESS],
+      params: [SPHEREX_ADMIN_ADDRESS],
     });
-    owner = await ethers.provider.getSigner(SPHEREX_OPERATOR_ADDRESS);
+    owner = await ethers.provider.getSigner(SPHEREX_ADMIN_ADDRESS);
+
+    // set owner to deployer
+    ethers.getSigners = async () => {
+      return [owner];
+    };
   } else {
     console.log("Running on real chain");
     [owner] = await ethers.getSigners();
   }
 
-  const engineContract = await ethers.getContractAt(
-    ENGINE_MINI_ABI,
-    SPHEREX_ENGINE_ADDRESS,
-    owner
-  );
-  const supportEngine = await engineContract.supportsInterface(
-    ENGINE_SUPPORTS_INTERFACE_DATA
-  );
+  const engineContract = await ethers.getContractAt(ENGINE_MINI_ABI, SPHEREX_ENGINE_ADDRESS, owner);
+  const supportEngine = await engineContract.supportsInterface(ENGINE_SUPPORTS_INTERFACE_DATA);
   assert(supportEngine);
 
   // ~~~~~~~~~~~ CHANGE SPHEREX OPERATOR ~~~~~~~~~~~
   for (contract in contractsData) {
-    console.log(
-      "Changing SphereX operator and engine for:",
-      contractsData[contract]["address"]
-    );
-    const protected = await ethers.getContractAt(
-      PROTECTED_MINI_ABI,
-      contractsData[contract]["address"],
-      owner
-    );
+    console.log("Changing SphereX operator and engine for:", contractsData[contract]["address"]);
+    const protected = await ethers.getContractAt(PROTECTED_MINI_ABI, contractsData[contract]["address"], owner);
     try {
-      await (
-        await protected.changeSphereXOperator(SPHEREX_OPERATOR_ADDRESS)
-      ).wait();
+      await (await protected.changeSphereXOperator(SPHEREX_OPERATOR_ADDRESS)).wait();
       const sphereXOperator = await protected.sphereXOperator();
       assert(sphereXOperator === SPHEREX_OPERATOR_ADDRESS);
 
@@ -184,18 +176,12 @@ async function main() {
           contractsData[contract]["address"],
           owner
         );
-        await (
-          await protectedProxy.addProtectedFuncSigs(
-            contractsData[contract]["selectors"]
-          )
-        ).wait();
+        await (await protectedProxy.addProtectedFuncSigs(contractsData[contract]["selectors"])).wait();
         console.log("Selectors added");
       }
 
       // this will fail in local fork if no real engine was depolyed to it before.
-      await (
-        await protected.changeSphereXEngine(SPHEREX_ENGINE_ADDRESS)
-      ).wait();
+      await (await protected.changeSphereXEngine(SPHEREX_ENGINE_ADDRESS)).wait();
       console.log("SphereX engine changed");
     } catch (e) {
       console.log(e);

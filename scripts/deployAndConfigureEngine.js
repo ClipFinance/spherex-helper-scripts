@@ -1,19 +1,19 @@
 const { ethers } = require("hardhat");
 const fs = require("fs");
 const hre = require("hardhat");
-const assert = require("assert");
 
 // ~~~~~~~~~~~ SETTINGS ~~~~~~~~~~~
 // this assume the owner and the operator will be the same address (if this is not the case the script should be altered).
-const ALLOWED_SENDER_PATH = "";
-const ALLOWED_PATTERNS_PATH = "";
-const LOCAL_FORK = true;
+const ALLOWED_SENDER_PATH = "./files/cliplineaallowedsenders.json";
+const ALLOWED_PATTERNS_PATH = "./files/cliplineaallowenpatterns.json";
 
 // ~~~~~~~~~~~ SPHERX ABI ~~~~~~~~~~~
-const HARDHAT_TEST_WALLET = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+const SPHEREX_ADMIN_ADDRESS = "0x0000619b2b909a6a422c18eb804b92f798370705";
 
 async function main() {
   console.log("Starting script");
+  const LOCAL_FORK = hre.network.name === "localhost" || hre.network.name === "hardhat";
+
   let allowedSenders;
   let allowedPatterns;
   try {
@@ -34,9 +34,14 @@ async function main() {
     console.log("Running on local fork");
     await hre.network.provider.request({
       method: "hardhat_impersonateAccount",
-      params: [HARDHAT_TEST_WALLET],
+      params: [SPHEREX_ADMIN_ADDRESS],
     });
-    owner = await ethers.provider.getSigner(HARDHAT_TEST_WALLET);
+    owner = await ethers.provider.getSigner(SPHEREX_ADMIN_ADDRESS);
+
+    // set owner to deployer
+    ethers.getSigners = async () => {
+      return [owner];
+    };
   } else {
     console.log("Running on real chain");
     [owner] = await ethers.getSigners();
@@ -56,13 +61,7 @@ async function main() {
     const chunk = allowedPatterns.slice(i, i + PATTERN_CHUNK_SIZE);
     await spherexEngine.addAllowedPatterns(chunk);
     patternsAdded += chunk.length;
-    console.log(
-      "added " +
-        patternsAdded +
-        " out of " +
-        allowedPatterns.length +
-        " patterns"
-    );
+    console.log("added " + patternsAdded + " out of " + allowedPatterns.length + " patterns");
   }
 }
 
