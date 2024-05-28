@@ -1,7 +1,6 @@
 const { ethers } = require("hardhat");
 const fs = require("fs");
 const hre = require("hardhat");
-const assert = require("assert");
 
 // ~~~~~~~~~~~ SETTINGS ~~~~~~~~~~~
 // this assume the owner and the operator will be the same address (if this is not the case the script should be altered).

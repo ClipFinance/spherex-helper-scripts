@@ -1,20 +1,22 @@
 const { ethers } = require("hardhat");
 const fs = require("fs");
 const hre = require("hardhat");
-const assert = require("assert");
 
 // ~~~~~~~~~~~ SETTINGS ~~~~~~~~~~~
 // this assume the owner and the operator will be the same address (if this is not the case the script should be altered).
-const ALLOWED_SENDER_PATH = "";
-const ALLOWED_PATTERNS_PATH = "";
-const ENGINE_ADDRESS = "";
-const LOCAL_FORK = true;
+const ALLOWED_SENDER_PATH = "./files/cliplineaallowedsenders.json";
+const ALLOWED_PATTERNS_PATH = "./files/cliplineamissingallowedpatterns.json";
+const ENGINE_ADDRESS = "0x7240F10FB48379073B2b34558b0a4a9B7d05EDcf";
 
 // ~~~~~~~~~~~ SPHERX ABI ~~~~~~~~~~~
-const HARDHAT_TEST_WALLET = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+const SPHEREX_ADMIN_ADDRESS = "0x0000619b2b909a6a422c18eb804b92f798370705";
 
 async function main() {
   console.log("Starting script");
+  const LOCAL_FORK = hre.network.name === "localhost" || hre.network.name === "hardhat";
+
+  const WAIT_CONFIRMATIONS = LOCAL_FORK ? 1 : 2; // 1 for local fork, 2 for mainnet
+
   let allowedSenders;
   let allowedPatterns;
   try {
@@ -33,40 +35,36 @@ async function main() {
   let owner;
   if (LOCAL_FORK) {
     console.log("Running on local fork");
-    console.log(HARDHAT_TEST_WALLET);
     await hre.network.provider.request({
       method: "hardhat_impersonateAccount",
-      params: [HARDHAT_TEST_WALLET],
+      params: [SPHEREX_ADMIN_ADDRESS],
     });
-    owner = await ethers.provider.getSigner(HARDHAT_TEST_WALLET);
+    owner = await ethers.provider.getSigner(SPHEREX_ADMIN_ADDRESS);
+
+    // set owner to deployer
+    ethers.getSigners = async () => {
+      return [owner];
+    };
   } else {
     console.log("Running on real chain");
     [owner] = await ethers.getSigners();
   }
-  const spherexEngine = await ethers.getContractAt(
-    "SphereXEngine",
-    ENGINE_ADDRESS
-  );
+
+  const spherexEngine = await ethers.getContractAt("SphereXEngine", ENGINE_ADDRESS);
 
   console.log("engine address is " + spherexEngine.target);
 
-  await spherexEngine.connect(owner).addAllowedSender(allowedSenders);
+  await (await spherexEngine.connect(owner).addAllowedSender(allowedSenders)).wait(WAIT_CONFIRMATIONS);
   console.log("allowed senders added");
 
-  const PATTERN_CHUNK_SIZE = 50;
+  const PATTERN_CHUNK_SIZE = 51;
   let patternsAdded = 0;
 
   for (let i = 0; i < allowedPatterns.length; i += PATTERN_CHUNK_SIZE) {
     const chunk = allowedPatterns.slice(i, i + PATTERN_CHUNK_SIZE);
-    await spherexEngine.connect(owner).addAllowedPatterns(chunk);
+    await (await spherexEngine.connect(owner).addAllowedPatterns(chunk)).wait(WAIT_CONFIRMATIONS);
     patternsAdded += chunk.length;
-    console.log(
-      "added " +
-        patternsAdded +
-        " out of " +
-        allowedPatterns.length +
-        " patterns"
-    );
+    console.log("added " + patternsAdded + " out of " + allowedPatterns.length + " patterns");
   }
 }
 
